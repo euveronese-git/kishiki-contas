@@ -9,6 +9,8 @@ npm run dev
 
 Abra `http://localhost:5173`.
 
+Entrar: o site pede o e-mail `euveronese@gmail.com` e envia um código/link.
+
 Os dados ficam no Supabase. A URL e a chave publishable vão no `.env` local e, em produção, nas variáveis do Netlify:
 
 ```

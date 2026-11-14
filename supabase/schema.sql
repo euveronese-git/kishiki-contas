@@ -1,5 +1,4 @@
--- Uso pessoal da Kishiki. A chave publishable do navegador lê e grava estas tabelas.
--- Não use esta política num site público com vários usuários.
+-- Uso pessoal da Kishiki. Só euveronese@gmail.com, autenticado, lê e grava.
 
 create table public.lancamentos (
   id uuid primary key default gen_random_uuid(),
@@ -26,19 +25,19 @@ create index lancamentos_prazo_idx on public.lancamentos (prazo, ordem);
 alter table public.lancamentos enable row level security;
 alter table public.metas enable row level security;
 
-create policy lancamentos_pessoal
+create policy lancamentos_logado
   on public.lancamentos
   for all
-  to anon, authenticated
-  using (true)
-  with check (true);
+  to authenticated
+  using ((auth.jwt() ->> 'email') = 'euveronese@gmail.com')
+  with check ((auth.jwt() ->> 'email') = 'euveronese@gmail.com');
 
-create policy metas_pessoal
+create policy metas_logado
   on public.metas
   for all
-  to anon, authenticated
-  using (true)
-  with check (true);
+  to authenticated
+  using ((auth.jwt() ->> 'email') = 'euveronese@gmail.com')
+  with check ((auth.jwt() ->> 'email') = 'euveronese@gmail.com');
 
-grant select, insert, update, delete on public.lancamentos to anon, authenticated;
-grant select, insert, update, delete on public.metas to anon, authenticated;
+grant select, insert, update, delete on public.lancamentos to authenticated;
+grant select, insert, update, delete on public.metas to authenticated;

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const LOCAL_KEY = "kishiki-lancamentos-v1";
 const META_KEY = "kishiki-metas-v1";
+export const ALLOWED_EMAIL = "euveronese@gmail.com";
 
 const DEFAULT_METAS = [
   { id: "site", rotulo: "Site", valor: 1000 },
@@ -10,16 +11,69 @@ const DEFAULT_METAS = [
 
 let cached = null;
 
-function client() {
+export function client() {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim();
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) return null;
-  if (!cached) cached = createClient(url, key);
+  if (!cached) {
+    cached = createClient(url, key, {
+      auth: { persistSession: true, detectSessionInUrl: true, autoRefreshToken: true },
+    });
+  }
   return cached;
 }
 
 export function isCloud() {
   return Boolean(client());
+}
+
+function redirectTo() {
+  if (typeof window === "undefined") return "https://kishiki-contas.netlify.app";
+  return window.location.origin;
+}
+
+export async function getSession() {
+  const supabase = client();
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}
+
+export function onAuth(callback) {
+  const supabase = client();
+  if (!supabase) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  return () => data.subscription.unsubscribe();
+}
+
+export async function sendAccess(email) {
+  const supabase = client();
+  const trimmed = email.trim().toLowerCase();
+  if (trimmed !== ALLOWED_EMAIL) throw new Error("Este e-mail não tem acesso a esta planilha.");
+  const { error } = await supabase.auth.signInWithOtp({
+    email: trimmed,
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: redirectTo(),
+    },
+  });
+  if (error) throw error;
+}
+
+export async function verifyAccess(email, token) {
+  const supabase = client();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim().toLowerCase(),
+    token: token.trim(),
+    type: "email",
+  });
+  if (error) throw error;
+  return data.session;
+}
+
+export async function signOut() {
+  const supabase = client();
+  if (supabase) await supabase.auth.signOut();
 }
 
 function readJson(key, fallback) {
@@ -81,12 +135,16 @@ export function explainError(error) {
   }
   if (/Invalid API key|JWT/i.test(message)) return "A chave do Supabase não foi aceita.";
   if (/Failed to fetch|NetworkError|fetch/i.test(message)) return "Não consegui falar com o Supabase.";
+  if (/rate limit|60 seconds/i.test(message)) return "Espere um minuto para pedir outro código.";
+  if (/invalid|expired|otp/i.test(message) && /token|otp|code/i.test(message)) return "Esse código não valeu. Peça outro.";
   return message || "Não consegui salvar no Supabase.";
 }
 
 export async function listAll() {
   const supabase = client();
   if (!supabase) return { items: readLocal(), metas: readMetas(), mode: "local" };
+  const session = await getSession();
+  if (!session) return { items: [], metas: DEFAULT_METAS, mode: "cloud" };
 
   const [itemsRes, metasRes] = await Promise.all([
     supabase.from("lancamentos").select("*").order("prazo", { ascending: true }).order("ordem", { ascending: true }),

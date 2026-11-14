@@ -1,6 +1,19 @@
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createItem, deleteItem, explainError, isCloud, listAll, updateItem, updateMeta } from "./lib/db.js";
+import {
+  ALLOWED_EMAIL,
+  createItem,
+  deleteItem,
+  explainError,
+  getSession,
+  listAll,
+  onAuth,
+  sendAccess,
+  signOut,
+  updateItem,
+  updateMeta,
+  verifyAccess,
+} from "./lib/db.js";
 
 const CATEGORIES = [
   ["autoescola", "Autoescola"],
@@ -109,6 +122,7 @@ const emptyDraft = {
 };
 
 export default function App() {
+  const [session, setSession] = useState(undefined);
   const [items, setItems] = useState([]);
   const [metas, setMetas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -125,6 +139,23 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
+    getSession().then((current) => {
+      if (alive) setSession(current);
+    });
+    const stop = onAuth((next) => {
+      if (alive) setSession(next);
+    });
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session === undefined) return;
+    if (!session) return;
+    let alive = true;
+    setLoading(true);
     listAll()
       .then((data) => {
         if (!alive) return;
@@ -140,7 +171,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [session]);
 
   const totals = summarize(items);
   const sitePrice = metas.find((meta) => meta.id === "site")?.valor ?? 1000;
@@ -298,6 +329,16 @@ export default function App() {
     });
   }
 
+  if (session === undefined) {
+    return (
+      <main className="grid min-h-screen place-items-center px-4">
+        <p className="text-sm text-zinc-500">Abrindo…</p>
+      </main>
+    );
+  }
+
+  if (!session) return <Login />;
+
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="flex items-end justify-between gap-4">
@@ -308,7 +349,12 @@ export default function App() {
             <p className="text-[11px] tracking-[0.22em] text-zinc-500">IT SOLUTIONS</p>
           </div>
         </div>
-        <p className="text-xs text-zinc-500">{isCloud() ? "Supabase" : "Neste navegador"}</p>
+        <div className="text-right">
+          <p className="text-xs text-zinc-500">{session.user?.email}</p>
+          <button type="button" onClick={() => signOut()} className="mt-1 text-xs text-zinc-400 hover:text-zinc-200">
+            Sair
+          </button>
+        </div>
       </header>
 
       <section className="mt-8">
@@ -524,6 +570,80 @@ export default function App() {
             </section>
           );
         })}
+      </div>
+    </main>
+  );
+}
+
+function Login() {
+  const [email, setEmail] = useState(ALLOWED_EMAIL);
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function send(event) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      await sendAccess(email);
+      setSent(true);
+    } catch (err) {
+      setError(explainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirm(event) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      await verifyAccess(email, code);
+    } catch (err) {
+      setError(explainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="mx-auto grid min-h-screen max-w-md place-content-center px-4">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+        <div className="flex items-center gap-3">
+          <span className="grid size-11 place-items-center rounded-2xl bg-[#d6ff4a] text-lg font-semibold text-zinc-950">K</span>
+          <div>
+            <p className="text-sm font-medium tracking-wide text-zinc-100">Kishiki</p>
+            <p className="text-[11px] tracking-[0.22em] text-zinc-500">IT SOLUTIONS</p>
+          </div>
+        </div>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-zinc-50">Entrar na planilha</h1>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">O acesso vai para o e-mail. Depois cole o código de 6 dígitos, ou clique no link.</p>
+        <form onSubmit={send} className="mt-5 grid gap-3">
+          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="field" autoComplete="email" />
+          <button type="submit" disabled={busy} className="rounded-2xl bg-[#d6ff4a] px-4 py-3 text-sm font-medium text-zinc-950 disabled:opacity-40">
+            {sent ? "Enviar de novo" : "Enviar acesso"}
+          </button>
+        </form>
+        {sent ? (
+          <form onSubmit={confirm} className="mt-4 grid gap-3">
+            <input
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              inputMode="numeric"
+              placeholder="Código de 6 dígitos"
+              className="field"
+              autoComplete="one-time-code"
+            />
+            <button type="submit" disabled={busy || code.trim().length < 6} className="rounded-2xl border border-white/15 px-4 py-3 text-sm text-zinc-100 disabled:opacity-40">
+              Entrar
+            </button>
+          </form>
+        ) : null}
+        {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
+        {sent && !error ? <p className="mt-4 text-sm text-zinc-400">Se o e-mail chegou, o código ou o link já liberam a planilha.</p> : null}
       </div>
     </main>
   );
