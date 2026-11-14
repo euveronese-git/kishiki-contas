@@ -16,4 +16,6 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-Build: `npm run build`. Pasta publicada: `dist`.
+No ar: https://kishiki-contas.netlify.app
+
+Build: `npm run build`. Pasta publicada: `dist`. Cada push em `main` no GitHub gera um deploy novo.
