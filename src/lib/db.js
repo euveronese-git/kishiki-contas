@@ -28,8 +28,7 @@ export function isCloud() {
 }
 
 function redirectTo() {
-  if (typeof window === "undefined") return "https://kishiki-contas.netlify.app";
-  return window.location.origin;
+  return "https://kishiki-contas.netlify.app";
 }
 
 export async function getSession() {
@@ -67,6 +66,15 @@ export async function verifyAccess(email, token) {
     token: token.trim(),
     type: "email",
   });
+  if (error) throw error;
+  return data.session;
+}
+
+export async function signInWithPassword(email, password) {
+  const supabase = client();
+  const trimmed = email.trim().toLowerCase();
+  if (trimmed !== ALLOWED_EMAIL) throw new Error("Este e-mail não tem acesso a esta planilha.");
+  const { data, error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
   if (error) throw error;
   return data.session;
 }

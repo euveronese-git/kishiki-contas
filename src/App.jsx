@@ -9,6 +9,7 @@ import {
   listAll,
   onAuth,
   sendAccess,
+  signInWithPassword,
   signOut,
   updateItem,
   updateMeta,
@@ -577,10 +578,24 @@ export default function App() {
 
 function Login() {
   const [email, setEmail] = useState(ALLOWED_EMAIL);
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  async function enter(event) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      await signInWithPassword(email, password);
+    } catch (err) {
+      setError(explainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function send(event) {
     event.preventDefault();
@@ -620,15 +635,28 @@ function Login() {
           </div>
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight text-zinc-50">Entrar na planilha</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-400">O acesso vai para o e-mail. Depois cole o código de 6 dígitos, ou clique no link.</p>
-        <form onSubmit={send} className="mt-5 grid gap-3">
+        <p className="mt-2 text-sm leading-6 text-zinc-400">Abra o site no ar e entre com e-mail e senha. Não use o link que abre localhost.</p>
+        <form onSubmit={enter} className="mt-5 grid gap-3">
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="field" autoComplete="email" />
-          <button type="submit" disabled={busy} className="rounded-2xl bg-[#d6ff4a] px-4 py-3 text-sm font-medium text-zinc-950 disabled:opacity-40">
-            {sent ? "Enviar de novo" : "Enviar acesso"}
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Senha"
+            className="field"
+            autoComplete="current-password"
+          />
+          <button type="submit" disabled={busy || !password} className="rounded-2xl bg-[#d6ff4a] px-4 py-3 text-sm font-medium text-zinc-950 disabled:opacity-40">
+            Entrar
+          </button>
+        </form>
+        <form onSubmit={send} className="mt-4">
+          <button type="submit" disabled={busy} className="text-xs text-zinc-400 hover:text-zinc-200">
+            {sent ? "Enviar código de novo" : "Receber código no e-mail"}
           </button>
         </form>
         {sent ? (
-          <form onSubmit={confirm} className="mt-4 grid gap-3">
+          <form onSubmit={confirm} className="mt-3 grid gap-3">
             <input
               value={code}
               onChange={(event) => setCode(event.target.value)}
@@ -638,12 +666,11 @@ function Login() {
               autoComplete="one-time-code"
             />
             <button type="submit" disabled={busy || code.trim().length < 6} className="rounded-2xl border border-white/15 px-4 py-3 text-sm text-zinc-100 disabled:opacity-40">
-              Entrar
+              Entrar com código
             </button>
           </form>
         ) : null}
         {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
-        {sent && !error ? <p className="mt-4 text-sm text-zinc-400">Se o e-mail chegou, o código ou o link já liberam a planilha.</p> : null}
       </div>
     </main>
   );
