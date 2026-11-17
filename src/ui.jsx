@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 export const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export function moneyText(value) {
@@ -81,18 +83,49 @@ export function fromDatetimeLocal(value) {
 
 export function FilterButton({ active, onClick, children }) {
   return (
-    <button type="button" onClick={onClick} className={`rounded-full px-3 py-1.5 text-xs ${active ? "bg-white text-zinc-950" : "bg-white/5 text-zinc-400"}`}>
+    <button type="button" onClick={onClick} className={`min-h-8 rounded-full px-3 py-1.5 text-xs transition-colors duration-200 ${active ? "bg-[var(--accent)] text-[var(--bg)]" : "bg-white/5 text-[var(--muted)] hover:bg-white/10 hover:text-[var(--text)]"}`}>
       {children}
     </button>
   );
 }
 
-export function Stat({ label, value, hint, accent = false }) {
+export function spotlightMove(event) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  event.currentTarget.style.setProperty("--spot-x", `${event.clientX - rect.left}px`);
+  event.currentTarget.style.setProperty("--spot-y", `${event.clientY - rect.top}px`);
+}
+
+export function CountUp({ value }) {
+  const [shown, setShown] = useState(Number(value) || 0);
+  const from = useRef(Number(value) || 0);
+
+  useEffect(() => {
+    const start = from.current;
+    const end = Number(value) || 0;
+    const began = performance.now();
+    let frame = 0;
+    const step = (now) => {
+      const progress = Math.min(1, (now - began) / 650);
+      const eased = 1 - (1 - progress) ** 3;
+      setShown(start + (end - start) * eased);
+      if (progress < 1) frame = requestAnimationFrame(step);
+      else from.current = end;
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <span className="tabular">{moneyText(shown)}</span>;
+}
+
+export function Stat({ label, amount, value, hint, accent = false, className = "" }) {
   return (
-    <article className={`rounded-3xl border p-4 ${accent ? "border-[#d6ff4a]/40 bg-[#d6ff4a]/10" : "border-white/10 bg-white/[0.03]"}`}>
-      <p className="text-xs text-zinc-400">{label}</p>
-      <p className={`mt-2 text-xl font-semibold tracking-tight ${accent ? "text-[#d6ff4a]" : "text-zinc-50"}`}>{value}</p>
-      {hint ? <p className="mt-1 text-xs text-zinc-500">{hint}</p> : null}
+    <article onPointerMove={spotlightMove} className={`glass spotlight flex h-full min-w-0 flex-col p-4 ${className}`}>
+      <p className="text-xs text-[var(--muted)]">{label}</p>
+      <p className={`relative mt-2 text-2xl font-semibold tracking-tight ${accent ? "text-[var(--accent)]" : "text-[var(--text)]"}`}>
+        {amount == null ? value : <CountUp value={amount} />}
+      </p>
+      {hint ? <p className="relative mt-auto pt-2 text-xs text-zinc-500">{hint}</p> : null}
     </article>
   );
 }

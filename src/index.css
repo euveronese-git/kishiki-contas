@@ -4,16 +4,37 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+:root {
+  --bg: #07090d;
+  --surface: rgb(255 255 255 / 0.04);
+  --line: rgb(255 255 255 / 0.08);
+  --accent: #a3e635;
+  --glow: #bef264;
+  --in: #34d399;
+  --out: #ff5c7a;
+  --warn: #ffb020;
+  --info: #3fe0ff;
+  --text: #f5f7fa;
+  --muted: #a8b0bd;
+  --disabled: #6b7280;
+  --radius-control: 12px;
+  --radius-card: 20px;
+}
+
 html {
   font-family: var(--font-sans);
   color-scheme: dark;
+  font-size: 16px;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #09090b;
-  color: #fafafa;
+  overflow-x: clip;
+  background:
+    radial-gradient(900px 420px at 12% -10%, rgb(63 224 255 / 0.08), transparent 50%),
+    var(--bg);
+  color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -23,21 +44,103 @@ body {
 }
 
 ::selection {
-  background: #d6ff4a;
-  color: #09090b;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .field {
   width: 100%;
-  border-radius: 1rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(255 255 255 / 0.04);
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line);
+  background: var(--surface);
   padding: 0.75rem 0.9rem;
   font-size: 0.875rem;
-  color: #fafafa;
+  color: var(--text);
   outline: none;
 }
 
 .field:focus {
-  border-color: rgb(214 255 74 / 0.7);
+  border-color: var(--glow);
+  box-shadow: 0 0 0 3px rgb(190 242 100 / 0.22);
+}
+
+.field-ok {
+  border-color: rgb(163 230 53 / 0.55);
+}
+
+.field-bad {
+  border-color: rgb(251 113 133 / 0.75);
+}
+
+.glass {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  transition: border-color 200ms ease;
+}
+
+.glass:hover,
+.glass:focus-within {
+  border-color: rgb(163 230 53 / 0.45);
+}
+
+.spotlight::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(380px circle at var(--spot-x, 50%) var(--spot-y, 0%), rgb(217 249 157 / 0.18), transparent 42%);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .spotlight:hover::before {
+    opacity: 1;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.pulse-lima {
+  animation: pulse-lima 1.6s ease-out infinite;
+}
+
+.meta-fill {
+  transform-origin: left center;
+  animation: meta-fill 700ms ease;
+}
+
+@keyframes pulse-lima {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(190 242 100 / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgb(190 242 100 / 0);
+  }
+}
+
+@keyframes meta-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }

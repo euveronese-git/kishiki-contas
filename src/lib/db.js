@@ -12,7 +12,17 @@ const DEFAULT_METAS = [
   { id: "pacote", rotulo: "Pacote", valor: 2500 },
 ];
 
+const REMEMBER_KEY = "casa-veronese-lembrar";
 let cached = null;
+
+export function rememberDevice(remember) {
+  localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+  cached = null;
+}
+
+function sessionStore() {
+  return localStorage.getItem(REMEMBER_KEY) === "0" ? sessionStorage : localStorage;
+}
 
 export function client() {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -20,7 +30,12 @@ export function client() {
   if (!url || !key) return null;
   if (!cached) {
     cached = createClient(url, key, {
-      auth: { persistSession: true, detectSessionInUrl: true, autoRefreshToken: true },
+      auth: {
+        persistSession: true,
+        detectSessionInUrl: true,
+        autoRefreshToken: true,
+        storage: sessionStore(),
+      },
     });
   }
   return cached;
@@ -57,11 +72,12 @@ function mapItem(row) {
     detalhe: row.detalhe || "",
     ordem: Number(row.ordem) || 0,
     created_at: row.created_at,
+    user_id: row.user_id || "",
   };
 }
 
 function mapMeta(row) {
-  return { id: row.id, rotulo: row.rotulo, valor: money(row.valor) ?? 0 };
+  return { id: row.id, rotulo: row.rotulo, valor: money(row.valor) ?? 0, user_id: row.user_id || "" };
 }
 
 function mapTask(row) {
@@ -73,6 +89,7 @@ function mapTask(row) {
     valor: row.valor == null ? "" : money(row.valor),
     feito: Boolean(row.feito),
     created_at: row.created_at,
+    user_id: row.user_id || "",
   };
 }
 
@@ -85,6 +102,7 @@ function mapEvent(row) {
     valor: row.valor == null ? "" : money(row.valor),
     feito: Boolean(row.feito),
     created_at: row.created_at,
+    user_id: row.user_id || "",
   };
 }
 
@@ -96,6 +114,7 @@ export function explainError(error) {
   if (/Invalid API key|JWT/i.test(message)) return "A chave do Supabase não foi aceita.";
   if (/Invalid login credentials/i.test(message)) return "E-mail ou senha não conferem.";
   if (/Password should be/i.test(message)) return "A senha precisa ter pelo menos 6 caracteres.";
+  if (/acessos_um_conjuge|já tem um cônjuge/i.test(message)) return "Este núcleo já tem um cônjuge.";
   if (/already registered|already been registered|duplicate key/i.test(message)) return "Esse e-mail já está na lista ou já tem conta.";
   if (/Failed to fetch|NetworkError|fetch/i.test(message)) return "Não consegui falar com o Supabase.";
   if (/rate limit|60 seconds/i.test(message)) return "Espere um minuto para pedir outro código.";
@@ -137,54 +156,118 @@ export async function signUp(email, password) {
   return second.data.session;
 }
 
+export async function sendPasswordReset(email) {
+  const supabase = client();
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw error;
+}
+
 export async function signOut() {
   const supabase = client();
   if (supabase) await supabase.auth.signOut();
+}
+
+const ACESSO_CAMPOS = "email, papel, vinculo, nucleo_id, user_id, created_at";
+
+function familiaAusente(error) {
+  return /vinculo|nucleo_id|nucleos|schema cache|column/i.test(error?.message || "");
+}
+
+function acessoLocal(email) {
+  return readJson(ACCESS_KEY, [{ email: ADMIN_EMAIL, papel: "super", vinculo: "individual", nucleo_id: null, user_id: "" }]).find(
+    (row) => row.email === email,
+  );
 }
 
 export async function myAccess() {
   const supabase = client();
   const session = await getSession();
   if (!session) return null;
+  const email = session.user.email?.toLowerCase();
   if (!supabase) {
-    return readJson(ACCESS_KEY, [{ email: ADMIN_EMAIL, papel: "admin" }]).find(
-      (row) => row.email === session.user.email?.toLowerCase(),
-    );
+    const row = acessoLocal(email);
+    return row ? { ...row, familiaPronta: true } : null;
   }
-  const { data, error } = await supabase.from("acessos").select("email, papel").eq("email", session.user.email.toLowerCase()).maybeSingle();
-  if (error) throw error;
-  return data;
+  const full = await supabase.from("acessos").select(ACESSO_CAMPOS).eq("email", email).maybeSingle();
+  if (full.error) {
+    if (!familiaAusente(full.error)) throw full.error;
+    const basic = await supabase.from("acessos").select("email, papel").eq("email", email).maybeSingle();
+    if (basic.error) throw basic.error;
+    return basic.data ? { ...basic.data, familiaPronta: false } : null;
+  }
+  return full.data ? { ...full.data, familiaPronta: true } : null;
 }
 
 export async function listAcessos() {
   const supabase = client();
-  if (!supabase) return readJson(ACCESS_KEY, [{ email: ADMIN_EMAIL, papel: "admin" }]);
-  const { data, error } = await supabase.from("acessos").select("email, papel, created_at").order("created_at");
-  if (error) throw error;
-  return data || [];
+  if (!supabase) return readJson(ACCESS_KEY, [{ email: ADMIN_EMAIL, papel: "super", vinculo: "individual", nucleo_id: null }]);
+  const full = await supabase.from("acessos").select(ACESSO_CAMPOS).order("created_at");
+  if (full.error) {
+    if (!familiaAusente(full.error)) throw full.error;
+    const basic = await supabase.from("acessos").select("email, papel, created_at").order("created_at");
+    if (basic.error) throw basic.error;
+    return basic.data || [];
+  }
+  return full.data || [];
 }
 
-export async function grantAccess(email) {
+export async function salvarAcesso({ email, vinculo, nucleoId }) {
   const trimmed = email.trim().toLowerCase();
   const supabase = client();
   if (!supabase) {
-    const rows = readJson(ACCESS_KEY, [{ email: ADMIN_EMAIL, papel: "admin" }]);
-    if (rows.length >= 10) throw new Error("A lista já tem 10 pessoas.");
-    if (!rows.some((row) => row.email === trimmed)) rows.push({ email: trimmed, papel: "membro" });
+    const rows = readJson(ACCESS_KEY, [{ email: ADMIN_EMAIL, papel: "super", vinculo: "individual", nucleo_id: null }]);
+    if (rows.some((row) => row.email === trimmed)) throw new Error("Esse e-mail já está na lista ou já tem conta.");
+    let nucleo = nucleoId || null;
+    let papel = "membro";
+    let marca = vinculo;
+    if (vinculo === "admin") {
+      nucleo = crypto.randomUUID();
+      papel = "admin";
+      marca = "individual";
+    }
+    if ((vinculo === "conjuge" || vinculo === "filho") && !nucleo) throw new Error("Escolha o admin desta família.");
+    if (vinculo === "conjuge" && rows.some((row) => row.nucleo_id === nucleo && row.vinculo === "conjuge")) throw new Error("Este núcleo já tem um cônjuge.");
+    if (vinculo === "individual") nucleo = null;
+    rows.push({ email: trimmed, papel, vinculo: marca, nucleo_id: nucleo, user_id: "" });
     writeJson(ACCESS_KEY, rows);
     return;
   }
-  const { error } = await supabase.from("acessos").insert({ email: trimmed, papel: "membro" });
+  let nucleo = nucleoId || null;
+  let papel = "membro";
+  let marca = vinculo;
+  if (vinculo === "admin") {
+    const created = await supabase.from("nucleos").insert({}).select("id").single();
+    if (created.error) throw created.error;
+    nucleo = created.data.id;
+    papel = "admin";
+    marca = "individual";
+  }
+  if (vinculo === "individual") nucleo = null;
+  const { error } = await supabase.from("acessos").insert({ email: trimmed, papel, vinculo: marca, nucleo_id: nucleo });
   if (error) throw error;
 }
 
 export async function revokeAccess(email) {
   const supabase = client();
   if (!supabase) {
+    const rows = readJson(ACCESS_KEY, []);
+    const alvo = rows.find((row) => row.email === email);
+    const nucleo = alvo?.papel === "admin" ? alvo.nucleo_id : null;
     writeJson(
       ACCESS_KEY,
-      readJson(ACCESS_KEY, []).filter((row) => row.email !== email),
+      rows.filter((row) => row.email !== email && (!nucleo || row.nucleo_id !== nucleo)),
     );
+    return;
+  }
+  const lista = await listAcessos();
+  const alvo = lista.find((row) => row.email === email);
+  if (alvo?.papel === "admin" && alvo.nucleo_id) {
+    const { error } = await supabase.from("acessos").delete().eq("nucleo_id", alvo.nucleo_id);
+    if (error) throw error;
+    const nucleo = await supabase.from("nucleos").delete().eq("id", alvo.nucleo_id);
+    if (nucleo.error) throw nucleo.error;
     return;
   }
   const { error } = await supabase.from("acessos").delete().eq("email", email);
@@ -193,15 +276,19 @@ export async function revokeAccess(email) {
 
 export async function listAll() {
   const supabase = client();
-  if (!supabase) return { items: readJson(LOCAL_KEY, []), metas: readJson(META_KEY, DEFAULT_METAS), mode: "local" };
+  if (!supabase) return { items: readJson(LOCAL_KEY, []), metas: readJson(META_KEY, DEFAULT_METAS), metasFamilia: [], mode: "local" };
   const [itemsRes, metasRes] = await Promise.all([
     supabase.from("lancamentos").select("*").order("prazo", { ascending: true }).order("ordem", { ascending: true }),
     supabase.from("metas").select("*"),
   ]);
   if (itemsRes.error) throw itemsRes.error;
   if (metasRes.error) throw metasRes.error;
-  const metas = (metasRes.data || []).map(mapMeta);
-  return { items: (itemsRes.data || []).map(mapItem), metas: metas.length ? metas : DEFAULT_METAS, mode: "cloud" };
+  const session = await getSession();
+  const uid = session?.user?.id;
+  const todas = (metasRes.data || []).map(mapMeta);
+  const metas = todas.filter((meta) => !meta.user_id || meta.user_id === uid);
+  const metasFamilia = todas.filter((meta) => meta.user_id && uid && meta.user_id !== uid);
+  return { items: (itemsRes.data || []).map(mapItem), metas: metas.length ? metas : DEFAULT_METAS, metasFamilia, mode: "cloud" };
 }
 
 function itemPayload(input) {

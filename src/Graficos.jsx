@@ -1,11 +1,12 @@
+import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PAGAR, RECEBER, categoryLabel } from "./lib/categories.js";
 import { addDays, addMonths, FilterButton, isoDate, moneyText, parseISO, Stat, todayISO } from "./ui.jsx";
 
-const PIE_COLORS = ["#d6ff4a", "#fb7185", "#fbbf24", "#67e8f9", "#c4b5fd", "#86efac", "#fda4af", "#f9a8d4", "#a5b4fc", "#fcd34d"];
+const PIE_COLORS = ["#34d399", "#ff5c7a", "#ffb020", "#3fe0ff", "#c4b5fd", "#86efac", "#fda4af", "#f9a8d4", "#a5b4fc", "#a3e635"];
 
-export default function Graficos({ items }) {
+export default function Graficos({ items, incluiFamilia = false }) {
   const [preset, setPreset] = useState("mes");
   const [bucket, setBucket] = useState("month");
   const [from, setFrom] = useState(addMonths(todayISO(), -2));
@@ -32,6 +33,7 @@ export default function Graficos({ items }) {
   );
 
   const series = useMemo(() => buildSeries(filtered, window), [filtered, window]);
+  const hoje = series.find((row) => row.hoje);
   const slices = useMemo(() => buildSlices(filtered), [filtered]);
   const pagar = filtered.filter((item) => item.tipo === "pagar").reduce((sum, item) => sum + item.valor, 0);
   const receber = filtered.filter((item) => item.tipo === "receber").reduce((sum, item) => sum + item.valor, 0);
@@ -39,6 +41,7 @@ export default function Graficos({ items }) {
 
   return (
     <div>
+      {incluiFamilia ? <p className="mb-3 text-sm text-[var(--muted)]">Estes gráficos somam a sua planilha com a do cônjuge e dos filhos.</p> : null}
       <div className="flex flex-wrap gap-2">
         {[
           ["dia", "Diário"],
@@ -87,78 +90,108 @@ export default function Graficos({ items }) {
         ))}
       </div>
 
+      <motion.div key={`${preset}-${window.bucket}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
       <section className="mt-4 grid gap-3 sm:grid-cols-3">
-        <Stat label="Sai no período" value={moneyText(pagar)} />
-        <Stat label="Entra no período" value={moneyText(receber)} />
-        <Stat label="Saldo do filtro" value={moneyText(receber - pagar)} accent />
+        <Stat label="Sai no período" amount={pagar} />
+        <Stat label="Entra no período" amount={receber} />
+        <Stat label="Saldo do filtro" amount={receber - pagar} accent />
       </section>
 
       <ChartCard title="Entradas e saídas">
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={series}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={series}>
+            <defs>
+              <linearGradient id="pagarGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ff5c7a" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#ff5c7a" stopOpacity="0.15" />
+              </linearGradient>
+              <linearGradient id="receberGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#34d399" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#34d399" stopOpacity="0.2" />
+              </linearGradient>
+            </defs>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis dataKey="label" stroke="#a1a1aa" fontSize={11} tickLine={false} />
-            <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} width={48} />
-            <Tooltip content={<MoneyTip />} />
-            <Legend />
-            <Bar dataKey="pagar" name="A pagar" fill="#fb7185" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="receber" name="A receber" fill="#d6ff4a" radius={[4, 4, 0, 0]} />
-          </BarChart>
+            <XAxis dataKey="label" stroke="#a8b0bd" fontSize={12} tickLine={false} />
+            <YAxis stroke="#a8b0bd" fontSize={11} tickLine={false} width={36} tickFormatter={(value) => (Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : value)} />
+            <Tooltip cursor={{ stroke: "#3fe0ff", strokeDasharray: "3 3" }} content={<MoneyTip />} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {hoje ? <ReferenceLine x={hoje.label} stroke="#a3e635" strokeDasharray="4 4" /> : null}
+            <Bar dataKey="pagar" name="A pagar" fill="url(#pagarGrad)" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="receber" name="A receber" fill="url(#receberGrad)" radius={[6, 6, 0, 0]} />
+            <Line type="monotone" dataKey="saldo" name="Saldo acumulado" stroke="#3fe0ff" strokeWidth={2} dot={false} />
+          </ComposedChart>
         </ResponsiveContainer>
       </ChartCard>
 
       <ChartCard title="Saldo acumulado">
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={series}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis dataKey="label" stroke="#a1a1aa" fontSize={11} tickLine={false} />
-            <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} width={48} />
-            <Tooltip content={<MoneyTip />} />
-            <Line type="monotone" dataKey="saldo" name="Saldo" stroke="#d6ff4a" strokeWidth={2} dot={false} />
+            <XAxis dataKey="label" stroke="#a8b0bd" fontSize={12} tickLine={false} />
+            <YAxis stroke="#a8b0bd" fontSize={11} tickLine={false} width={36} tickFormatter={(value) => (Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : value)} />
+            <Tooltip cursor={{ stroke: "#3fe0ff", strokeDasharray: "3 3" }} content={<MoneyTip />} />
+            {hoje ? <ReferenceLine x={hoje.label} stroke="#a3e635" strokeDasharray="4 4" /> : null}
+            <Line type="monotone" dataKey="saldo" name="Saldo" stroke="#3fe0ff" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard title="Por categoria">
+      <section className="glass mt-4 min-w-0 overflow-hidden rounded-3xl p-4 sm:p-5">
+        <h2 className="mb-3 text-sm font-medium text-zinc-200">Por categoria</h2>
         {slices.length === 0 ? (
           <p className="py-10 text-center text-sm text-zinc-500">Nada neste filtro.</p>
         ) : (
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={slices} dataKey="valor" nameKey="nome" innerRadius={58} outerRadius={90} paddingAngle={2}>
-                  {slices.map((slice, index) => (
-                    <Cell key={slice.nome} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<MoneyTip />} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <>
+            <div className="mx-auto h-[200px] w-full max-w-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={slices} dataKey="valor" nameKey="nome" innerRadius="58%" outerRadius="88%" paddingAngle={2} stroke="none">
+                    {slices.map((slice, index) => (
+                      <Cell key={slice.nome} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<MoneyTip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <ul className="mt-2 space-y-2">
+              {slices.map((slice, index) => (
+                <li key={slice.nome} className="flex items-center gap-2 text-sm">
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
+                  <span className="min-w-0 flex-1 truncate text-[var(--text)]">{slice.nome}</span>
+                  <span className="tabular shrink-0 text-xs text-[var(--muted)]">{slice.parte}%</span>
+                  <span className="tabular shrink-0 text-sm text-[var(--text)]">{moneyText(slice.valor)}</span>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
-      </ChartCard>
+      </section>
+      </motion.div>
     </div>
   );
 }
 
 function ChartCard({ title, children }) {
   return (
-    <section className="mt-4 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+    <section className="glass mt-4 min-w-0 overflow-hidden rounded-3xl p-4 sm:p-5">
       <h2 className="mb-3 text-sm font-medium text-zinc-200">{title}</h2>
-      <div className="h-[280px] w-full min-w-0">{children}</div>
+      <div className="h-[220px] w-full min-w-0 overflow-hidden sm:h-[280px]">{children}</div>
     </section>
   );
 }
 
 function MoneyTip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  const liquido = row && "pagar" in row ? row.receber - row.pagar : null;
   return (
-    <div className="rounded-2xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs text-zinc-200">
+    <div className="rounded-2xl border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs text-zinc-200 shadow-xl backdrop-blur">
       {label ? <p className="mb-1 text-zinc-400">{label}</p> : null}
       {payload.map((item) => (
-        <p key={item.name}>{item.name}: {moneyText(item.value)}</p>
+        <p key={item.name} className="tabular">{item.name}: {moneyText(item.value)}</p>
       ))}
+      {liquido == null ? null : <p className={`tabular mt-1 border-t border-white/10 pt-1 ${liquido < 0 ? "text-[var(--out)]" : "text-[var(--info)]"}`}>Saldo líquido: {moneyText(liquido)}</p>}
     </div>
   );
 }
@@ -175,7 +208,7 @@ function buildSeries(items, window) {
   let running = 0;
   return [...map.values()].map((row) => {
     running += row.receber - row.pagar;
-    return { ...row, saldo: Math.round(running * 100) / 100, pagar: round(row.pagar), receber: round(row.receber) };
+    return { ...row, hoje: row.key === bucketOf(todayISO(), window.bucket), saldo: Math.round(running * 100) / 100, pagar: round(row.pagar), receber: round(row.receber) };
   });
 }
 
@@ -185,7 +218,9 @@ function buildSlices(items) {
     const nome = `${item.tipo === "pagar" ? "Pagar" : "Receber"} · ${categoryLabel(item.categoria)}`;
     map.set(nome, (map.get(nome) || 0) + item.valor);
   }
-  return [...map.entries()].map(([nome, valor]) => ({ nome, valor: round(valor) })).sort((a, b) => b.valor - a.valor);
+  const rows = [...map.entries()].map(([nome, valor]) => ({ nome, valor: round(valor) })).sort((a, b) => b.valor - a.valor);
+  const total = rows.reduce((sum, row) => sum + row.valor, 0) || 1;
+  return rows.map((row) => ({ ...row, parte: Math.round((row.valor / total) * 100) }));
 }
 
 function bucketKeys(from, to, bucket) {
