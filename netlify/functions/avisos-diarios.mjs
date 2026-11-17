@@ -1,10 +1,9 @@
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { avisosDe, textoDoDia } from "./lib/avisos.mjs";
 import { env, reply, saoPauloDay } from "./lib/ia.mjs";
 
-// Um aviso por pessoa, pensado para 08:00 em America/Sao_Paulo.
-// O relógio não está ligado nesta leva. Chame com o cabeçalho x-avisos-secret
-// quando existir um agendamento. Sem a chave, a função não envia nada.
+// Um aviso por pessoa às 08:00 em America/Sao_Paulo.
+// O relógio da Netlify manda { next_run }. Sem o segredo, uma chamada pública não envia.
 
 export async function handler(event) {
   try {
@@ -21,7 +20,7 @@ export async function handler(event) {
     const publica = process.env.VAPID_PUBLIC_KEY || "";
     const privada = process.env.VAPID_PRIVATE_KEY || "";
     if (!config.service || !publica || !privada) return reply(503, { error: "off" });
-    webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:euveronese@gmail.com", publica, privada);
+    setVapidDetails(process.env.VAPID_SUBJECT || "mailto:euveronese@gmail.com", publica, privada);
     const inscricoes = await linhas(config, "push_subscriptions", "select=user_id,endpoint,p256dh,auth");
     const today = saoPauloDay();
     let enviados = 0;
@@ -29,7 +28,7 @@ export async function handler(event) {
       const texto = await textoDaPessoa(config, grupo.userId, today);
       if (!texto) continue;
       for (const inscricao of grupo.rows) {
-        await webpush.sendNotification({
+        await sendNotification({
           endpoint: inscricao.endpoint,
           keys: { p256dh: inscricao.p256dh, auth: inscricao.auth },
         }, JSON.stringify({ title: "Casa Veronese", body: texto })).catch(() => {});
