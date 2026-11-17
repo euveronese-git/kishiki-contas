@@ -1,4 +1,13 @@
--- Uso pessoal da Kishiki. Só euveronese@gmail.com, autenticado, lê e grava.
+-- Família Kishiki. Só e-mails em public.acessos, autenticados, leem e gravam.
+-- O administrador é euveronese@gmail.com. No máximo 10 e-mails.
+
+create schema if not exists private;
+
+create table public.acessos (
+  email text primary key,
+  papel text not null default 'membro' check (papel in ('admin', 'membro')),
+  created_at timestamptz not null default now()
+);
 
 create table public.lancamentos (
   id uuid primary key default gen_random_uuid(),
@@ -20,24 +29,24 @@ create table public.metas (
   valor numeric(12,2) not null check (valor >= 0)
 );
 
+create table public.atividades (
+  id uuid primary key default gen_random_uuid(),
+  titulo text not null,
+  descricao text,
+  prazo date,
+  valor numeric(12,2) check (valor is null or valor >= 0),
+  feito boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table public.eventos (
+  id uuid primary key default gen_random_uuid(),
+  titulo text not null,
+  descricao text,
+  inicio timestamptz not null,
+  valor numeric(12,2) check (valor is null or valor >= 0),
+  feito boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create index lancamentos_prazo_idx on public.lancamentos (prazo, ordem);
-
-alter table public.lancamentos enable row level security;
-alter table public.metas enable row level security;
-
-create policy lancamentos_logado
-  on public.lancamentos
-  for all
-  to authenticated
-  using ((auth.jwt() ->> 'email') = 'euveronese@gmail.com')
-  with check ((auth.jwt() ->> 'email') = 'euveronese@gmail.com');
-
-create policy metas_logado
-  on public.metas
-  for all
-  to authenticated
-  using ((auth.jwt() ->> 'email') = 'euveronese@gmail.com')
-  with check ((auth.jwt() ->> 'email') = 'euveronese@gmail.com');
-
-grant select, insert, update, delete on public.lancamentos to authenticated;
-grant select, insert, update, delete on public.metas to authenticated;
