@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const APP_URL = "https://kishiki-contas.netlify.app";
+const APP_URL = "https://casaveronese.netlify.app";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "invalid" });

@@ -1,6 +1,8 @@
 [auth]
-site_url = "https://kishiki-contas.netlify.app"
+site_url = "https://casaveronese.netlify.app"
 additional_redirect_urls = [
+  "https://casaveronese.netlify.app",
+  "https://casaveronese.netlify.app/**",
   "https://kishiki-contas.netlify.app",
   "https://kishiki-contas.netlify.app/**",
   "http://localhost:5173",

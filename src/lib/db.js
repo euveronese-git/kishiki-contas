@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-export const APP_URL = "https://kishiki-contas.netlify.app";
+export const APP_URL = "https://casaveronese.netlify.app";
 const SENHA_KEY = "casa-veronese-definir-senha";
 
 export function marcarLinkDeSenha() {
