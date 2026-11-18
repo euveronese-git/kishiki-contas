@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({ email }),
   });
+  if (recover.status === 429) return json(429, { error: "O Supabase só deixa mandar poucos e-mails por hora. Espere e peça de novo." });
   if (!recover.ok) return json(502, { error: "invalid" });
   return json(200, { enviado: "recuperacao" });
 });

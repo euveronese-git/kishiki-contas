@@ -200,7 +200,16 @@ export async function enviarConvite(email) {
   const { data, error } = await supabase.functions.invoke("convidar", {
     body: { email: email.trim().toLowerCase() },
   });
-  if (error) throw error;
+  if (error) {
+    let detail = error.message || "";
+    try {
+      const body = await error.context?.json?.();
+      if (body?.error) detail = body.error;
+    } catch {
+      detail = error.message || "";
+    }
+    throw new Error(detail);
+  }
   if (data?.error) throw new Error(data.error);
   return data?.enviado || "convite";
 }
