@@ -2,8 +2,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const APP_URL = "https://casaveronese.netlify.app";
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json(405, { error: "invalid" });
   const url = Deno.env.get("SUPABASE_URL") || "";
   const anon = Deno.env.get("SUPABASE_ANON_KEY") || "";
@@ -49,6 +54,6 @@ Deno.serve(async (req) => {
 function json(status, body) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...cors },
   });
 }
