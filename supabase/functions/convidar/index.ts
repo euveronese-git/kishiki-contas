@@ -38,14 +38,14 @@ Deno.serve(async (req) => {
   if (!invite.error) return json(200, { enviado: "convite" });
   if (!/already|registered|exists/i.test(invite.error.message || "")) return json(502, { error: "invalid" });
 
-  const recover = await fetch(`${url}/auth/v1/recover`, {
+  const recover = await fetch(`${url}/auth/v1/recover?redirect_to=${encodeURIComponent(APP_URL)}`, {
     method: "POST",
     headers: {
       apikey: anon,
       Authorization: `Bearer ${anon}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, redirect_to: APP_URL }),
+    body: JSON.stringify({ email }),
   });
   if (!recover.ok) return json(502, { error: "invalid" });
   return json(200, { enviado: "recuperacao" });
