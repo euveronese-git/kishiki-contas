@@ -9,8 +9,8 @@ import Contas from "./Contas.jsx";
 import Familia from "./Familia.jsx";
 import Graficos from "./Graficos.jsx";
 import IaVeronese from "./IaVeronese.jsx";
-import { ADMIN_EMAIL, explainError, listAcessos, listAll, myAccess, onAuth, getSession, signOut } from "./lib/db.js";
-import Login from "./Login.jsx";
+import { ADMIN_EMAIL, explainError, linkDeSenha, listAcessos, listAll, myAccess, onAuth, getSession, signOut } from "./lib/db.js";
+import Login, { CriarSenha } from "./Login.jsx";
 
 const TABS = [
   ["contas", "Contas", Wallet],
@@ -33,14 +33,16 @@ export default function App() {
   const [fabAberto, setFabAberto] = useState(false);
   const [pedidoAgenda, setPedidoAgenda] = useState(0);
   const [ouvindo, setOuvindo] = useState(false);
+  const [definirSenha, setDefinirSenha] = useState(linkDeSenha);
 
   useEffect(() => {
     let alive = true;
     getSession().then((current) => {
       if (alive) setSession(current);
     });
-    const stop = onAuth((next) => {
+    const stop = onAuth((next, event) => {
       if (alive) setSession(next);
+      if (event === "PASSWORD_RECOVERY" || linkDeSenha()) setDefinirSenha(true);
     });
     return () => {
       alive = false;
@@ -114,6 +116,7 @@ export default function App() {
     );
   }
   if (!session) return <Login />;
+  if (definirSenha) return <CriarSenha onDone={() => setDefinirSenha(false)} />;
 
   const email = session.user?.email?.toLowerCase() || "";
   const pronta = acesso?.familiaPronta === true;

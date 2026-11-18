@@ -1,5 +1,26 @@
 import { createClient } from "@supabase/supabase-js";
 
+export const APP_URL = "https://kishiki-contas.netlify.app";
+const SENHA_KEY = "casa-veronese-definir-senha";
+
+export function marcarLinkDeSenha() {
+  if (typeof window === "undefined") return;
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const type = hash.get("type");
+  if (type === "recovery" || type === "invite" || type === "signup") sessionStorage.setItem(SENHA_KEY, type);
+}
+
+export function linkDeSenha() {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(SENHA_KEY) === "recovery" || sessionStorage.getItem(SENHA_KEY) === "invite" || sessionStorage.getItem(SENHA_KEY) === "signup";
+}
+
+export function limparLinkDeSenha() {
+  if (typeof window !== "undefined") sessionStorage.removeItem(SENHA_KEY);
+}
+
+marcarLinkDeSenha();
+
 const LOCAL_KEY = "kishiki-lancamentos-v1";
 const META_KEY = "kishiki-metas-v1";
 const TASK_KEY = "kishiki-atividades-v1";
@@ -131,7 +152,10 @@ export async function getSession() {
 export function onAuth(callback) {
   const supabase = client();
   if (!supabase) return () => {};
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") sessionStorage.setItem(SENHA_KEY, "recovery");
+    callback(session, event);
+  });
   return () => data.subscription.unsubscribe();
 }
 
@@ -159,9 +183,26 @@ export async function signUp(email, password) {
 export async function sendPasswordReset(email) {
   const supabase = client();
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-    redirectTo: window.location.origin,
+    redirectTo: APP_URL,
   });
   if (error) throw error;
+}
+
+export async function definirSenha(password) {
+  const supabase = client();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+  limparLinkDeSenha();
+}
+
+export async function enviarConvite(email) {
+  const supabase = client();
+  const { data, error } = await supabase.functions.invoke("convidar", {
+    body: { email: email.trim().toLowerCase() },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data?.enviado || "convite";
 }
 
 export async function signOut() {

@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { ADMIN_EMAIL, explainError, listAcessos, revokeAccess, salvarAcesso } from "./lib/db.js";
+import { ADMIN_EMAIL, enviarConvite, explainError, listAcessos, revokeAccess, salvarAcesso } from "./lib/db.js";
 
 const VINCULOS = [
   ["individual", "Individual"],
@@ -15,7 +15,9 @@ export default function Familia({ modo, pronta }) {
   const [vinculo, setVinculo] = useState("individual");
   const [nucleoId, setNucleoId] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState("");
 
   useEffect(() => {
     if (!pronta) {
@@ -43,16 +45,37 @@ export default function Familia({ modo, pronta }) {
   async function add(event) {
     event.preventDefault();
     setError("");
+    setNotice("");
     if ((vinculo === "conjuge" || vinculo === "filho") && !nucleoId) {
       setError("Escolha o admin desta família.");
       return;
     }
+    const alvo = email;
     try {
       await salvarAcesso({ email, vinculo, nucleoId });
       setRows(await listAcessos());
       setEmail("");
     } catch (err) {
       setError(explainError(err));
+      return;
+    }
+    try {
+      setNotice(await textoDoConvite(alvo));
+    } catch (err) {
+      setError(`O acesso foi liberado, mas o e-mail não saiu. ${explainError(err)}`);
+    }
+  }
+
+  async function reenviar(alvo) {
+    setError("");
+    setNotice("");
+    setSending(alvo);
+    try {
+      setNotice(await textoDoConvite(alvo));
+    } catch (err) {
+      setError(explainError(err));
+    } finally {
+      setSending("");
     }
   }
 
@@ -80,6 +103,7 @@ export default function Familia({ modo, pronta }) {
       <section className="glass mx-auto max-w-xl rounded-3xl p-4 sm:p-5">
         <h2 className="text-sm font-medium text-[var(--text)]">Sua família</h2>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Você vê a sua planilha e a de quem está nesta lista. Eles continuam no app normal e não veem a sua. Quem entra é liberado pelo administrador do Veronese.</p>
+        {notice ? <p className="mt-3 text-sm text-[var(--muted)]">{notice}</p> : null}
         {error ? <p className="mt-3 text-sm text-[var(--out)]">{error}</p> : null}
         {loading ? <p className="mt-4 text-sm text-[var(--muted)]">Carregando…</p> : null}
         <Lista rows={rows.filter((row) => row.email !== ADMIN_EMAIL)} />
@@ -108,16 +132,19 @@ export default function Familia({ modo, pronta }) {
         ) : null}
         <button type="submit" className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-[var(--bg)]">Liberar</button>
       </form>
+      {notice ? <p className="mt-3 text-sm text-[var(--muted)]">{notice}</p> : null}
       {error ? <p className="mt-3 text-sm text-[var(--out)]">{error}</p> : null}
       {loading ? <p className="mt-4 text-sm text-[var(--muted)]">Carregando…</p> : null}
       <div className="mt-4 space-y-4">
-        <Grupo titulo="Individuais" rows={rows.filter((row) => row.vinculo === "individual" && row.papel !== "admin" && row.papel !== "super")} onRemove={remove} />
+        <Grupo titulo="Individuais" rows={rows.filter((row) => row.vinculo === "individual" && row.papel !== "admin" && row.papel !== "super")} onRemove={remove} onResend={reenviar} sending={sending} />
         {chefes.map((chefe) => (
           <Grupo
             key={chefe.email}
             titulo={chefe.email}
             rows={[chefe, ...rows.filter((row) => row.nucleo_id === chefe.nucleo_id && row.email !== chefe.email)]}
             onRemove={remove}
+            onResend={reenviar}
+            sending={sending}
           />
         ))}
       </div>
@@ -125,17 +152,24 @@ export default function Familia({ modo, pronta }) {
   );
 }
 
-function Grupo({ titulo, rows, onRemove }) {
+async function textoDoConvite(email) {
+  const tipo = await enviarConvite(email);
+  return tipo === "recuperacao"
+    ? `O link para criar a senha foi enviado para ${email}.`
+    : `O convite foi enviado para ${email}.`;
+}
+
+function Grupo({ titulo, rows, onRemove, onResend, sending }) {
   if (!rows.length) return null;
   return (
     <div>
       <p className="text-xs text-[var(--muted)]">{titulo}</p>
-      <Lista rows={rows} onRemove={onRemove} />
+      <Lista rows={rows} onRemove={onRemove} onResend={onResend} sending={sending} />
     </div>
   );
 }
 
-function Lista({ rows, onRemove }) {
+function Lista({ rows, onRemove, onResend, sending }) {
   if (!rows.length) return <p className="mt-3 text-sm text-[var(--muted)]">Ninguém neste núcleo ainda.</p>;
   return (
     <ul className="mt-2 space-y-2">
@@ -149,7 +183,12 @@ function Lista({ rows, onRemove }) {
             </div>
           </div>
           {onRemove && row.email !== ADMIN_EMAIL ? (
-            <button type="button" onClick={() => onRemove(row.email)} className="text-xs text-[var(--out)]">Tirar acesso</button>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {onResend ? (
+                <button type="button" disabled={sending === row.email} onClick={() => onResend(row.email)} className="text-xs text-[var(--glow)] disabled:opacity-40">Reenviar</button>
+              ) : null}
+              <button type="button" onClick={() => onRemove(row.email)} className="text-xs text-[var(--out)]">Tirar acesso</button>
+            </div>
           ) : null}
         </motion.li>
       ))}

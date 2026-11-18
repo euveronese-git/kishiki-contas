@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { brand } from "./config/brand.js";
-import { explainError, rememberDevice, sendPasswordReset, signInWithPassword } from "./lib/db.js";
+import { definirSenha, explainError, rememberDevice, sendPasswordReset, signInWithPassword } from "./lib/db.js";
 import { spotlightMove } from "./ui.jsx";
 
 export default function Login() {
@@ -37,7 +37,7 @@ export default function Login() {
     setBusy(true);
     try {
       await sendPasswordReset(email);
-      setNotice("Se este e-mail estiver liberado, o link chega em alguns minutos. O plano grátis manda poucos e-mails por hora.");
+      setNotice("Se este e-mail já tem conta, o link chega em alguns minutos e abre o app no ar. O plano grátis manda poucos e-mails por hora.");
     } catch (err) {
       setError(explainError(err));
     } finally {
@@ -80,6 +80,52 @@ export default function Login() {
         {error ? <p className="relative mt-4 text-sm text-[var(--out)]">{error}</p> : null}
       </div>
       <p className="mt-6 text-center text-xs text-[var(--disabled)]">{brand.credit}</p>
+    </main>
+  );
+}
+
+export function CriarSenha({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      await definirSenha(password);
+      onDone();
+    } catch (err) {
+      setError(explainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="mx-auto grid min-h-screen max-w-md place-content-center px-4 py-10">
+      <form onSubmit={submit} className="glass grid gap-3 p-6">
+        <span className="grid size-11 place-items-center rounded-[12px] bg-[var(--accent)] text-lg font-semibold text-[var(--bg)]">{brand.mark}</span>
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text)]">Crie sua senha</h1>
+        <p className="text-sm leading-6 text-[var(--muted)]">Esse link vale para entrar na Casa Veronese. Depois, a senha serve no app no ar.</p>
+        <div className="relative">
+          <input
+            type={show ? "text" : "password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Nova senha"
+            className="field pr-20"
+            autoComplete="new-password"
+            minLength={6}
+            required
+          />
+          <button type="button" onClick={() => setShow((current) => !current)} className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-[var(--muted)]">{show ? "Ocultar" : "Mostrar"}</button>
+        </div>
+        <button type="submit" disabled={busy} className="h-11 rounded-[12px] bg-[var(--accent)] text-sm font-medium text-[var(--bg)] disabled:opacity-40">Guardar senha</button>
+        {error ? <p className="text-sm text-[var(--out)]">{error}</p> : null}
+      </form>
     </main>
   );
 }
